@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 	"net/http"
-	"rushikesh/go-object-storage/internal/handlers"
+	"github.com/boring-personality/go-object-storage/internal/handlers"
 )
 
 const PORT = "8001"
