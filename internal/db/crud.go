@@ -32,7 +32,7 @@ func NewDatabase() (*Database, error) {
 const CONN_STRING = "postgres://root:root@localhost:5432/objectstore"
 
 func (d *Database) Create() error{
-	query := `CREATE TABLE objects (
+	query := `CREATE TABLE IF NOT EXISTS objects (
 	id TEXT PRIMARY KEY,
 	original_name TEXT,
 	disk_path TEXT NOT NULL,
