@@ -1,8 +1,10 @@
 services:
   db:
-    image: mysql
+    image: postgres
     restart: always
     ports:
-      - "3306:3306"
+      - "5432:5432"
     environment:
-      MYSQL_ROOT_PASSWORD: root 
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: root
+      POSTGRES_DB: objectstore
