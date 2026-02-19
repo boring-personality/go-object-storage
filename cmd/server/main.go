@@ -18,7 +18,7 @@ func main() {
 	mux.HandleFunc("GET /", serveIndex)
 	storageHandle := handlers.NewStorageHandler()
 	mux.HandleFunc("POST /upload", storageHandle.UploadFile)
-	
+
 	// get file via id endpoint
 	mux.HandleFunc("GET /download/{id}", storageHandle.DownloadFile)
 	fmt.Printf("Starting the server at %s\n", PORT)
@@ -27,6 +27,7 @@ func main() {
 	if err != nil {
 		fmt.Printf("Error is starting the http server: %s\n", err)
 	}
+	defer storageHandle.Data.DB.Close()
 }
 
 func serveIndex(w http.ResponseWriter, r *http.Request) {

@@ -50,4 +50,19 @@ func TestInsertAndRead(t *testing.T) {
 	if read_obj.Disk_path != obj.Disk_path {
 		t.Fatal("Disk path does not match")
 	}
+	defer database.DB.Close()
 }
+
+func TestReadNegative(t *testing.T) {
+	database := setupDatabase(t)
+
+	obj, err := database.Read("nonexistentid")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if obj != nil {
+		t.Fatal("Expected nil got value", obj)
+	}
+	defer database.DB.Close()
+}
+

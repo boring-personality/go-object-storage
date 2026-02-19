@@ -28,15 +28,21 @@ func NewStorageHandler() *StorageHandler {
 }
 
 func (sh *StorageHandler) UploadFile(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+
 	fmt.Println(r.Method, "/upload")
 	err := r.ParseMultipartForm(10<<20) // This value approximately comes out to be 10MB
 	if err != nil {
 		http.Error(w, "Some issue uploading the file", http.StatusBadRequest)
+		return
 	}
 
 	file, header, err := r.FormFile("File")
 	if err != nil {
 		http.Error(w, "Error fetching the file", http.StatusBadRequest)
+		return
 	}
 
 	fmt.Printf("Filename: %s, Size: %d\n", header.Filename, header.Size)
@@ -52,6 +58,7 @@ func (sh *StorageHandler) UploadFile(w http.ResponseWriter, r *http.Request) {
 	dst, err :=	os.Create(dst_path)
 	if err != nil {
 		fmt.Println("Error in saving file", err)
+		http.Error(w, "Error saving file", http.StatusBadRequest)
 		return
 	}
 	defer dst.Close()
@@ -59,6 +66,8 @@ func (sh *StorageHandler) UploadFile(w http.ResponseWriter, r *http.Request) {
 	_, err = io.Copy(dst, file)
 	if err != nil {
 		fmt.Println("Error in writing to the file", err)
+		http.Error(w, "Error writing to the file", http.StatusBadRequest)
+		return
 	}
 
 	var obj db.Object
@@ -68,14 +77,16 @@ func (sh *StorageHandler) UploadFile(w http.ResponseWriter, r *http.Request) {
 	obj.Size = header.Size
 
 	err = sh.Data.Insert(obj)
-	// let's keep the token to file mapping in non persistent memory for now
-	// dictionary[token_string] = dst_path
 
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprintf(w, "The file is uploaded succesfully. Here is the ID: %s", token_string)
 }
 
 func (sh *StorageHandler) DownloadFile(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+
 	token := r.PathValue("id")
 	fmt.Println(r.Method, "/download/", token)
 	// fmt.Printf("The requested file location is %s\n", dictionary[token])
@@ -83,6 +94,7 @@ func (sh *StorageHandler) DownloadFile(w http.ResponseWriter, r *http.Request) {
 	obj, err := sh.Data.Read(token)
 	if err != nil {
 		http.Error(w, "Failed to get file from database", http.StatusBadRequest)
+		return
 	}
 
 	dst, err := os.Open(obj.Disk_path)
@@ -102,6 +114,7 @@ func (sh *StorageHandler) DownloadFile(w http.ResponseWriter, r *http.Request) {
 	_, err = io.Copy(w, dst)
 	if err != nil {
 		fmt.Println("Failed to send the file to client", err)
+		http.Error(w, "Failed to send the file to client", http.StatusBadRequest)
 		return
 	}
 }
