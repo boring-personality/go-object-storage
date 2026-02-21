@@ -33,6 +33,7 @@ func main() {
 func serveIndex(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
 	}
 	http.ServeFile(w, r, "index.html")
 }
