@@ -29,19 +29,19 @@ func NewStorageHandler() *StorageHandler {
 
 func (sh *StorageHandler) UploadFile(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		writeJson(w, http.StatusMethodNotAllowed, jsonResponse{Message: "Method not allowed"})
 	}
 
 	fmt.Println(r.Method, "/upload")
 	err := r.ParseMultipartForm(10<<20) // This value approximately comes out to be 10MB
 	if err != nil {
-		http.Error(w, "Some issue uploading the file", http.StatusBadRequest)
+		writeJson(w, http.StatusBadRequest, jsonResponse{Message: "Some issue uploading the file"})
 		return
 	}
 
 	file, header, err := r.FormFile("File")
 	if err != nil {
-		http.Error(w, "Error fetching the file", http.StatusBadRequest)
+		writeJson(w, http.StatusBadRequest, jsonResponse{Message: "Error fetching the file"})
 		return
 	}
 
@@ -57,16 +57,14 @@ func (sh *StorageHandler) UploadFile(w http.ResponseWriter, r *http.Request) {
 	dst_path := filepath.Join("./data", token_string+extension)
 	dst, err :=	os.Create(dst_path)
 	if err != nil {
-		fmt.Println("Error in saving file", err)
-		http.Error(w, "Error saving file", http.StatusBadRequest)
+		writeJson(w, http.StatusBadRequest, jsonResponse{Message: "Error saving file"})
 		return
 	}
 	defer dst.Close()
 
 	_, err = io.Copy(dst, file)
 	if err != nil {
-		fmt.Println("Error in writing to the file", err)
-		http.Error(w, "Error writing to the file", http.StatusBadRequest)
+		writeJson(w, http.StatusBadRequest, jsonResponse{Message: "Error fetching the file"})
 		return
 	}
 
@@ -77,14 +75,16 @@ func (sh *StorageHandler) UploadFile(w http.ResponseWriter, r *http.Request) {
 	obj.Size = header.Size
 
 	err = sh.Data.Insert(obj)
-
-	w.WriteHeader(http.StatusOK)
-	fmt.Fprintf(w, "The file is uploaded succesfully. Here is the ID: %s", token_string)
+	resp := jsonResponse {
+		Message: 	"The file is updated succesfully",
+		ID:			token_string,
+	}
+	writeJson(w, http.StatusOK, resp)
 }
 
 func (sh *StorageHandler) DownloadFile(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		writeJson(w, http.StatusMethodNotAllowed, jsonResponse{Message: "Method not allowed"})
 	}
 
 	token := r.PathValue("id")
@@ -93,13 +93,17 @@ func (sh *StorageHandler) DownloadFile(w http.ResponseWriter, r *http.Request) {
 
 	obj, err := sh.Data.Read(token)
 	if err != nil {
-		http.Error(w, "Failed to get file from database", http.StatusBadRequest)
+		writeJson(w, http.StatusBadRequest, jsonResponse{Message: "Failed to get file from database"})
+		return
+	}
+	if obj == nil {
+		writeJson(w, http.StatusBadRequest, jsonResponse{Message: "File not present in the database"})
 		return
 	}
 
 	dst, err := os.Open(obj.Disk_path)
 	if err != nil {
-		http.Error(w, "Failed to locate the file", http.StatusBadRequest)
+		writeJson(w, http.StatusBadRequest, jsonResponse{Message: "Failed to locate the file"})
 		return
 	}
 	defer dst.Close()
@@ -113,8 +117,7 @@ func (sh *StorageHandler) DownloadFile(w http.ResponseWriter, r *http.Request) {
 
 	_, err = io.Copy(w, dst)
 	if err != nil {
-		fmt.Println("Failed to send the file to client", err)
-		http.Error(w, "Failed to send the file to client", http.StatusBadRequest)
+		writeJson(w, http.StatusBadRequest, jsonResponse{Message: "Failed to send the file to client"})
 		return
 	}
 }

@@ -68,7 +68,6 @@ func (d *Database) Read(id string) (*Object, error){
 
 	row := d.DB.QueryRow(query, id)
 	var obj Object
-
 	err := row.Scan(
 		&obj.Id,
 		&obj.Original_name,
@@ -76,14 +75,11 @@ func (d *Database) Read(id string) (*Object, error){
 		&obj.Size,
 		&obj.Created_at,
 	)
-
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
 		return nil, err
 	}
-
 	return &obj, nil
-
 }
