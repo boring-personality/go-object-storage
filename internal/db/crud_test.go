@@ -23,6 +23,17 @@ func setupDatabase(t *testing.T) *Database {
 	return database
 }
 
+func deleteDatabase(t *testing.T) {
+	t.Helper()
+
+	database, err := NewDatabase()
+
+	_, err = database.DB.Exec("DROP TABLE test_objects")
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestInsertAndRead(t *testing.T) {
 	database := setupDatabase(t)
 

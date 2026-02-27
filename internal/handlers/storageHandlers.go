@@ -1,18 +1,15 @@
 package handlers
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
-	"path/filepath"
 	"github.com/boring-personality/go-object-storage/internal/db"
 )
 
 type StorageHandler struct{
-	Data *db.Database
+	Data db.ObjectStore
 }
 
 func NewStorageHandler() *StorageHandler {
@@ -48,23 +45,9 @@ func (sh *StorageHandler) UploadFile(w http.ResponseWriter, r *http.Request) {
 	fmt.Printf("Filename: %s, Size: %d\n", header.Filename, header.Size)
 	defer file.Close()
 
-	token_length := 10
-	token := make([]byte, token_length)
-	rand.Read(token)
-	token_string := hex.EncodeToString(token)
-
-	extension := filepath.Ext(header.Filename)
-	dst_path := filepath.Join("./data", token_string+extension)
-	dst, err :=	os.Create(dst_path)
+	token_string, dst_path, err := storeFile(header.Filename, file)
 	if err != nil {
-		writeJson(w, http.StatusBadRequest, jsonResponse{Message: "Error saving file"})
-		return
-	}
-	defer dst.Close()
-
-	_, err = io.Copy(dst, file)
-	if err != nil {
-		writeJson(w, http.StatusBadRequest, jsonResponse{Message: "Error fetching the file"})
+		writeJson(w, http.StatusBadRequest, jsonResponse{Message: err.Error()})
 		return
 	}
 
@@ -75,11 +58,15 @@ func (sh *StorageHandler) UploadFile(w http.ResponseWriter, r *http.Request) {
 	obj.Size = header.Size
 
 	err = sh.Data.Insert(obj)
+	if err != nil {
+		writeJson(w, http.StatusInternalServerError, jsonResponse{Message: "Failed to insert the data"})
+		return
+	}
 	resp := jsonResponse {
 		Message: 	"The file is updated succesfully",
 		ID:			token_string,
 	}
-	writeJson(w, http.StatusOK, resp)
+	writeJson(w, http.StatusCreated, resp)
 }
 
 func (sh *StorageHandler) DownloadFile(w http.ResponseWriter, r *http.Request) {

@@ -1,8 +1,14 @@
 package handlers
 
 import (
+	"crypto/rand"
+	"encoding/hex"
+	"io"
+	"os"
 	"encoding/json"
 	"net/http"
+	"path/filepath"
+	"mime/multipart"
 )
 
 type jsonResponse struct {
@@ -30,4 +36,22 @@ func writeJson(w http.ResponseWriter, status int, data any, header ...http.Heade
 		return err
 	}
 	return nil
+}
+
+func storeFile(filename string, f multipart.File) (string, string, error) {
+	token_length := 10
+	token := make([]byte, token_length)
+	rand.Read(token)
+	token_string := hex.EncodeToString(token)
+
+	extension := filepath.Ext(filename)
+	dst_path := filepath.Join("./data", token_string+extension)	// need to think of something to store the destination path
+	dst, err :=	os.Create(dst_path)
+	if err != nil {
+		return "", "", err
+	}
+	defer dst.Close()
+
+	_, err = io.Copy(dst, f)
+	return token_string, dst_path, err
 }

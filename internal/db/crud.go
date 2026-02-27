@@ -7,6 +7,11 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
+type ObjectStore interface {
+	Insert(obj Object) 	error
+	Read(id string)	(*Object, error)
+}
+
 type Database struct{
 	DB *sql.DB
 }
