@@ -67,6 +67,7 @@ func TestUploadFile_OK(t *testing.T) {
 	if fakedata.InsertObj.Original_name != "test.txt" {
 		t.Fatal("Unexpected filename", fakedata.InsertObj.Original_name)
 	}
+	os.Remove(fakedata.InsertObj.Disk_path)
 }
 
 func TestUploadFile_DBError(t *testing.T) {
@@ -94,6 +95,9 @@ func TestUploadFile_DBError(t *testing.T) {
 	rr := httptest.NewRecorder()
 
 	sh.UploadFile(rr, req)
+	// this is very not correct but I am new to this so,
+	// I will do it like this for on will fix this afterwards
+	os.Remove(fakedata.InsertObj.Disk_path)
 
 	if rr.Code != http.StatusInternalServerError {
 		t.Fatal("status code mistmatch, the database should be down")
