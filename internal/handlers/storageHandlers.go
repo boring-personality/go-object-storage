@@ -5,8 +5,12 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strconv"
+
 	"github.com/boring-personality/go-object-storage/internal/db"
 )
+
+const CHUNKSIZE = 10 * 1024 * 1023 // 10 MB
 
 type StorageHandler struct{
 	Data db.ObjectStore
@@ -45,17 +49,56 @@ func (sh *StorageHandler) UploadFile(w http.ResponseWriter, r *http.Request) {
 	fmt.Printf("Filename: %s, Size: %d\n", header.Filename, header.Size)
 	defer file.Close()
 
-	token_string, dst_path, err := storeFile(header.Filename, file)
+	// token_string, _, err := storeFile(header.Filename, file)
+	// if err != nil {
+	// 	writeJson(w, http.StatusBadRequest, jsonResponse{Message: err.Error()})
+	// 	return
+	// }
+
+	token_string, err := get_file_token(10)
 	if err != nil {
-		writeJson(w, http.StatusBadRequest, jsonResponse{Message: err.Error()})
-		return
+	 	writeJson(w, http.StatusBadRequest, jsonResponse{Message: err.Error()})
 	}
 
 	var obj db.Object
 	obj.Id = token_string
-	obj.Disk_path = dst_path
 	obj.Original_name = header.Filename
 	obj.Size = header.Size
+	chunkIndex := 0
+	objectDir := "./data/" + token_string
+	err = os.MkdirAll(objectDir, 0755)
+	if err != nil {
+		writeJson(w, http.StatusBadRequest, jsonResponse{Message: "Failed to create directory for object"})
+	}
+	for {
+		directory := fmt.Sprintf("%s/%d", objectDir, chunkIndex)
+		chunkFile, err := os.Create(directory)
+		if err != nil {
+			writeJson(w, http.StatusBadRequest, jsonResponse{Message: err.Error()})
+		}
+		written, err := io.CopyN(chunkFile, file, CHUNKSIZE)
+		chunkFile.Close()
+
+		var chunk db.ChunkMetadata
+		chunk.FileID = token_string
+		chunk.Hash = "haven't figured out yet"
+		chunk.Index = chunkIndex
+		chunk.Path = directory
+		obj.Chunks = append(obj.Chunks, chunk)
+		fmt.Println("chunk", chunkIndex, "written bytes: ", written)
+
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			if err == io.ErrUnexpectedEOF {
+				// this is for the last chunk that can be smaller than chunk size
+				break
+			}
+			writeJson(w, http.StatusBadRequest, jsonResponse{Message: err.Error()})
+		}
+		chunkIndex++
+	}
 
 	err = sh.Data.Insert(obj)
 	if err != nil {
@@ -79,21 +122,15 @@ func (sh *StorageHandler) DownloadFile(w http.ResponseWriter, r *http.Request) {
 	// fmt.Printf("The requested file location is %s\n", dictionary[token])
 
 	obj, err := sh.Data.Read(token)
+	chunks, err := sh.Data.GetChunksFromDB(token)
 	if err != nil {
 		writeJson(w, http.StatusBadRequest, jsonResponse{Message: "Failed to get file from database"})
 		return
 	}
-	if obj == nil {
+	if chunks == nil {
 		writeJson(w, http.StatusBadRequest, jsonResponse{Message: "File not present in the database"})
 		return
 	}
-
-	dst, err := os.Open(obj.Disk_path)
-	if err != nil {
-		writeJson(w, http.StatusBadRequest, jsonResponse{Message: "Failed to locate the file"})
-		return
-	}
-	defer dst.Close()
 
 	// this tells the browser to treat the data as sequence of 8 bit bytes
 	// so that the browser does not try to render it
@@ -102,9 +139,21 @@ func (sh *StorageHandler) DownloadFile(w http.ResponseWriter, r *http.Request) {
 	// this tell the Content-Disposition is of type attachment so download the file with filename given
 	w.Header().Set("Content-Disposition", "attachment; filename="+obj.Original_name)
 
-	_, err = io.Copy(w, dst)
-	if err != nil {
-		writeJson(w, http.StatusBadRequest, jsonResponse{Message: "Failed to send the file to client"})
-		return
+	w.Header().Set("Content-Length", strconv.FormatInt(obj.Size, 10))
+
+	for _, chunk := range chunks {
+		file, err := os.Open(chunk.Path)
+
+		// dst, err := os.Open(obj.Original_name)
+		if err != nil {
+			writeJson(w, http.StatusBadRequest, jsonResponse{Message: "Failed to locate the file"})
+			return
+		}
+		_, err = io.Copy(w, file)
+		if err != nil {
+			writeJson(w, http.StatusBadRequest, jsonResponse{Message: "Failed to send the file to client"})
+			return
+		}
+		file.Close()
 	}
 }

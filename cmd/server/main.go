@@ -27,6 +27,6 @@ func main() {
 	if err != nil {
 		fmt.Printf("Error is starting the http server: %s\n", err)
 	}
-	defer storageHandle.Data.DB.Close()
+	// defer storageHandle.Data.DB.Close()
 }
 

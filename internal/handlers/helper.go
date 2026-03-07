@@ -39,11 +39,7 @@ func writeJson(w http.ResponseWriter, status int, data any, header ...http.Heade
 }
 
 func storeFile(filename string, f multipart.File) (string, string, error) {
-	token_length := 10
-	token := make([]byte, token_length)
-	rand.Read(token)
-	token_string := hex.EncodeToString(token)
-
+	token_string, _ := get_file_token(10)
 	extension := filepath.Ext(filename)
 	dst_path := filepath.Join("./data", token_string+extension)	// need to think of something to store the destination path
 	dst, err :=	os.Create(dst_path)
@@ -54,4 +50,14 @@ func storeFile(filename string, f multipart.File) (string, string, error) {
 
 	_, err = io.Copy(dst, f)
 	return token_string, dst_path, err
+}
+
+func get_file_token(token_length int) (string, error) {
+	token := make([]byte, token_length)
+	_, err := rand.Read(token)
+	if err != nil {
+		return "", err
+	}
+	token_string := hex.EncodeToString(token)
+	return token_string, nil
 }
