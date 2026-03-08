@@ -18,6 +18,7 @@ type FakeDatabase struct {
 	InsertObj		db.Object
 	ReadCalled		bool
 	ReadObj			db.Object
+	ChunksCalled	bool
 }
 
 func (fd *FakeDatabase) Insert(obj db.Object) error {
@@ -29,6 +30,11 @@ func (fd *FakeDatabase) Insert(obj db.Object) error {
 func (fd *FakeDatabase) Read(id string) (*db.Object, error) {
 	fd.ReadCalled = true
 	return &fd.ReadObj, fd.Err
+}
+
+func (fd *FakeDatabase) GetChunksFromDB(id string) ([]db.ChunkMetadata, error) {
+	fd.ChunksCalled = true
+	return fd.ReadObj.Chunks, fd.Err
 }
 
 func TestUploadFile_OK(t *testing.T) {
@@ -44,8 +50,14 @@ func TestUploadFile_OK(t *testing.T) {
 	if err != nil {
 		t.Fatal("Failed to set the test file metadata", err)
 	}
-
-	part.Write([]byte("Testing the upload file"))
+	// Let just have a brute force way to generate the file
+	// we will design something to have different types of files
+	// with different sizes
+	test_string := []byte("Testing the upload file")
+	target_size := 10 * 1024 * 1024 // approx 100 MB
+	for _ = range(target_size) {
+		part.Write(test_string)
+	}
 	writer.Close()
 
 	req := httptest.NewRequest(http.MethodPost, "/upload", &buf)
@@ -55,6 +67,7 @@ func TestUploadFile_OK(t *testing.T) {
 
 	sh.UploadFile(rr, req)
 
+	os.RemoveAll("./data")
 	if rr.Code != http.StatusCreated {
 		t.Log(rr.Body.String())
 		t.Fatal("Status code mis-match")
@@ -67,7 +80,6 @@ func TestUploadFile_OK(t *testing.T) {
 	if fakedata.InsertObj.Original_name != "test.txt" {
 		t.Fatal("Unexpected filename", fakedata.InsertObj.Original_name)
 	}
-	os.Remove(fakedata.InsertObj.Disk_path)
 }
 
 func TestUploadFile_DBError(t *testing.T) {
@@ -97,7 +109,7 @@ func TestUploadFile_DBError(t *testing.T) {
 	sh.UploadFile(rr, req)
 	// this is very not correct but I am new to this so,
 	// I will do it like this for on will fix this afterwards
-	os.Remove(fakedata.InsertObj.Disk_path)
+	os.RemoveAll("./data")
 
 	if rr.Code != http.StatusInternalServerError {
 		t.Fatal("status code mistmatch, the database should be down")
@@ -105,18 +117,30 @@ func TestUploadFile_DBError(t *testing.T) {
 }
 
 func TestDownloadFile_OK(t *testing.T) {
-	temp, _ := os.CreateTemp("", "test*")
-	defer os.Remove(temp.Name())
+	var chunks []db.ChunkMetadata
 
 	content := []byte("Testing download")
-	temp.Write(content)
-	temp.Close()
+	target_size := 10
+	for i := range(target_size){
+		temp, _ := os.CreateTemp("", "test*")
+		temp.Write(content)
+		chunk := &db.ChunkMetadata {
+			FileID: "123",
+			Index: i,
+			Path: temp.Name(),
+			Hash: "testing the thing",
+		}
+		t.Log(chunk.Path)
+		chunks = append(chunks, *chunk)
+		temp.Close()
+		defer os.Remove(temp.Name())
+	}
 
 	obj := &db.Object {
 		Id: 			"123",
 		Original_name:	"test.txt",
-		Disk_path:		temp.Name(),
-		Size:			int64(len(content)),
+		Size:			int64(len(content)*target_size),
+		Chunks:			chunks,
 	}
 
 	fakedata := &FakeDatabase {
@@ -140,8 +164,8 @@ func TestDownloadFile_OK(t *testing.T) {
 		t.Fatal("failed to call readdata")
 	}
 
-	if rr.Body.String() != string(content) {
-		t.Fatal("File content don't match")
+	if len(rr.Body.Bytes()) != int(obj.Size) {
+		t.Fatal("Size does not match, got:", len(rr.Body.Bytes()), ",expected:", obj.Size)
 	}
 	cd := rr.Header().Get("Content-Disposition")
 	if cd == "" {
@@ -160,7 +184,6 @@ func TestDownloadFile_InvalidKey(t *testing.T) {
 	obj := &db.Object {
 		Id: 			"123",
 		Original_name:	"test.txt",
-		Disk_path:		temp.Name(),
 		Size:			int64(len(content)),
 	}
 

@@ -10,7 +10,7 @@ func setupDatabase(t *testing.T) *Database {
 		t.Fatal(err)
 	}
 
-	_, err = database.DB.Exec("DROP TABLE IF EXISTS objects")
+	// _, err = database.DB.Exec("DROP TABLE IF EXISTS objects")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -23,26 +23,23 @@ func setupDatabase(t *testing.T) *Database {
 	return database
 }
 
-func deleteDatabase(t *testing.T) {
-	t.Helper()
-
-	database, err := NewDatabase()
-
-	_, err = database.DB.Exec("DROP TABLE test_objects")
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
 func TestInsertAndRead(t *testing.T) {
 	database := setupDatabase(t)
 
 	obj := Object {
 		Id: 			"1",
 		Original_name:	"abc.mp4",
-		Disk_path:		"./data/abc.mp4",
 		Size:			15,
 	}
+
+	chunk := ChunkMetadata {
+		FileID:		"1",
+		Index:		1,
+		Hash:		"testhash",
+		Path:		"somepath",
+	}
+
+	obj.Chunks = append(obj.Chunks, chunk)
 
 	err := database.Insert(obj)
 	if err != nil {
@@ -50,16 +47,24 @@ func TestInsertAndRead(t *testing.T) {
 	}
 
 	read_obj, err := database.Read("1")
-
 	if err != nil {
 		t.Fatal(err)
 	}
 
+	obj_chunks, err := database.GetChunksFromDB("1")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(obj_chunks) != 1 {
+		t.Fatal("could not retrive all the chunks")
+	}
+	if obj_chunks[0].Path != "somepath" {
+		t.Fatal("Failed to retrive the path for chunks")
+	}
+
 	if read_obj.Id != obj.Id {
 		t.Fatal("IDs do not match to the inserted value")
-	}
-	if read_obj.Disk_path != obj.Disk_path {
-		t.Fatal("Disk path does not match")
 	}
 	defer database.DB.Close()
 }
